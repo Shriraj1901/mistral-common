@@ -1297,7 +1297,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if isinstance(message.content, str):
                 curr_tokens = self._encode_normal_content_assistant_message(message)
             elif isinstance(message.content, list):
-                content_tokens, images, audios = self._encode_content_chunks(message.content)
+                chunks = message.content
+                # Match the string path: trailing spaces of the final text chunk are dropped.
+                if isinstance(chunks[-1], TextChunk):
+                    chunks = [*chunks[:-1], TextChunk(text=chunks[-1].text.rstrip(" "))]
+                content_tokens, images, audios = self._encode_content_chunks(chunks)
                 assert not images and not audios, (
                     f"Assistant messages cannot contain images or audios, got {len(images)} images "
                     f"and {len(audios)} audios."

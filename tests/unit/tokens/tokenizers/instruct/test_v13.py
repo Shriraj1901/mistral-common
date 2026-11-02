@@ -7,8 +7,11 @@ import numpy as np
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
     ChatMessage,
+    UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
@@ -1157,3 +1160,34 @@ def test_encode_instruct_rejected(
 
     with pytest.raises(expected_exception=expected_exception, match=expected_message):
         tokenizer.encode_instruct(request=instruct_request)
+
+
+@pytest.mark.parametrize(
+    argnames="padded, stripped",
+    argvalues=[
+        pytest.param(
+            [ThinkChunk(thinking="t"), TextChunk(text="b  ")],
+            [ThinkChunk(thinking="t"), TextChunk(text="b")],
+            id="think-then-text",
+        ),
+        pytest.param(
+            [TextChunk(text="a "), ThinkChunk(thinking="t"), TextChunk(text="b ")],
+            [TextChunk(text="a "), ThinkChunk(thinking="t"), TextChunk(text="b")],
+            id="only-last-chunk-is-stripped",
+        ),
+    ],
+)
+def test_encode_assistant_chunks_strip_trailing_spaces(
+    with_think_tokenizer: InstructTokenizerV13,
+    padded: list[TextChunk | ThinkChunk],
+    stripped: list[TextChunk | ThinkChunk],
+) -> None:
+    r"""Strip trailing spaces of the last text chunk, as is done for string content."""
+
+    def encode(content: list[TextChunk | ThinkChunk]) -> Tokenized:
+        request = InstructRequest[ChatMessage, Tool](
+            messages=[UserMessage(content="a"), AssistantMessage(content=content)]
+        )
+        return with_think_tokenizer.encode_instruct(request=request)
+
+    assert_tokenized_equal(actual=encode(padded), expected=encode(stripped))
